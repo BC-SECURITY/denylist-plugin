@@ -1,0 +1,85 @@
+from __future__ import print_function
+
+from empire.server.common.hooks import hooks
+from empire.server.common.plugins import Plugin
+from empire.server.database import models
+
+"""
+The purpose of this plugin is to block certain IP addresses from connecting to the server.
+It is to showcase the event-driven nature of the hook system.
+"""
+class Plugin(Plugin):
+
+    def onLoad(self):
+        """
+        Any custom loading behavior - called by init, so any
+        behavior you'd normally put in __init__ goes here
+        """
+        self.info = {
+                        # Plugin Name, at the moment this much match the do_ command
+                        'Name': 'denylist',
+
+                        # List of one or more authors for the plugin
+                        'Author': ['@vinnybod'],
+
+                        # More verbose multi-line description of the plugin
+                        'Description': """
+                        The purpose of this plugin is to block certain IP addresses from connecting to the server.
+                        It is to showcase the event-driven nature of the hook system.
+                        """,
+
+                        # Software and tools that from the MITRE ATT&CK framework (https://attack.mitre.org/software/)
+                        'Software': '',
+
+                        # Techniques that from the MITRE ATT&CK framework (https://attack.mitre.org/techniques/enterprise/)
+                        'Techniques': [],
+
+                        # List of any references/other comments
+                        'Comments': [
+                        ]
+                    },
+
+        self.options = {
+                        'Addresses': {
+                            'Description': 'List of IP addresses to block. Comma Separated.',
+                            'Required': False,
+                            'Value': '127.0.0.1',
+                        },
+                    }
+
+    def execute(self, command):
+        """
+        """
+        try:
+            # If we wanted we could do validation here that what was set was valid ip addresses.
+            # For now we'll just assume it's valid.
+            return {'message': f'Set IP Addresses to {self.options["Addresses"]["Value"]}'}
+        except:
+            return False
+
+    def register(self, mainMenu):
+        """
+        Register hooks for the plugin
+        """
+        hooks.register_hook(hooks.AFTER_AGENT_STAGE2_HOOK, 'denylist', self.run_after_agent_checkin)
+
+    def run_after_agent_checkin(self, agent: models.Agent):
+        """
+        Check if agent is in the list of addresses to block. If it is, kill the agent.
+        """
+        if not agent.internal_ip or not self.options['Addresses']['Value']:
+            return
+
+        agent_ips = agent.internal_ip.split(',')
+        deny_list = self.options['Addresses']['Value'].split(',')
+        for ip in agent_ips:
+            if ip in deny_list:
+                self.mainMenu.plugin_socketio_message(self.info[0]['Name'], f'[!] Killing agent {agent.session_id} due to blocked ip: {ip}')
+                self.mainMenu.agents.add_agent_task_db(agent.session_id, 'TASK_EXIT', uid=1)
+
+    def shutdown(self):
+        """
+        Kills additional processes that were spawned
+        """
+        # If the plugin spawns a process provide a shutdown method for when Empire exits else leave it as pass
+        pass
