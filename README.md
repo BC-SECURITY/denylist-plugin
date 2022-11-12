@@ -4,9 +4,9 @@ It is to showcase the event-driven nature of the hook system.
 
 ## Install
 Prerequisites:
-- Empire >=4.3.3
+- Empire >=5.0
 
-4.3.3 adds the `hooks.AFTER_AGENT_STAGE2_HOOK`
+4.3.3 adds the `AFTER_AGENT_CHECKIN_HOOK`
 
 1. Add denylist.plugin to the plugins folder of Empire.
 
