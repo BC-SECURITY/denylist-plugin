@@ -21,9 +21,9 @@ class Plugin(Plugin):
             'Name': 'denylist',
             "Authors": [
                 {
-                    "Name": "Anthony Rose",
-                    "Handle": "@Cx01N",
-                    "Link": "https://twitter.com/Cx01N_",
+                    "Name": "Vincent Rose",
+                    "Handle": "@Vinnybod",
+                    "Link": "https://twitter.com/_vinnybod",
                 },
             ],
             'Description': """
