@@ -1,81 +1,81 @@
 from __future__ import print_function
 
-from empire.server.common.hooks import hooks
+import logging
+
+import empire.server.common.helpers as helpers
 from empire.server.common.plugins import Plugin
-from empire.server.database import models
+from empire.server.core.agent_task_service import AgentTaskService
+from empire.server.core.db import models
+from empire.server.core.hooks import hooks
+from empire.server.core.plugin_service import PluginService
+
+log = logging.getLogger(__name__)
 
 """
 The purpose of this plugin is to block certain IP addresses from connecting to the server.
 It is to showcase the event-driven nature of the hook system.
 """
 class Plugin(Plugin):
-
     def onLoad(self):
-        """
-        Any custom loading behavior - called by init, so any
-        behavior you'd normally put in __init__ goes here
-        """
         self.info = {
-                        # Plugin Name, at the moment this much match the do_ command
-                        'Name': 'denylist',
-
-                        # List of one or more authors for the plugin
-                        'Author': ['@vinnybod'],
-
-                        # More verbose multi-line description of the plugin
-                        'Description': """
-                        The purpose of this plugin is to block certain IP addresses from connecting to the server.
-                        It is to showcase the event-driven nature of the hook system.
-                        """,
-
-                        # Software and tools that from the MITRE ATT&CK framework (https://attack.mitre.org/software/)
-                        'Software': '',
-
-                        # Techniques that from the MITRE ATT&CK framework (https://attack.mitre.org/techniques/enterprise/)
-                        'Techniques': [],
-
-                        # List of any references/other comments
-                        'Comments': [
-                        ]
-                    },
+            'Name': 'denylist',
+            "Authors": [
+                {
+                    "Name": "Vincent Rose",
+                    "Handle": "@Vinnybod",
+                    "Link": "https://twitter.com/_vinnybod",
+                },
+            ],
+            'Description': """
+            The purpose of this plugin is to block certain IP addresses from connecting to the server.
+            It is to showcase the event-driven nature of the hook system.
+            """,
+            'Software': '',
+            'Techniques': [],
+            'Comments': []
+        }
 
         self.options = {
-                        'Addresses': {
-                            'Description': 'List of IP addresses to block. Comma Separated.',
-                            'Required': False,
-                            'Value': '127.0.0.1',
-                        },
-                    }
+            'Addresses': {
+                'Description': 'List of IP addresses to block. Comma Separated.',
+                'Required': False,
+                'Value': '127.0.0.1',
+            },
+        }
 
     def execute(self, command):
-        """
-        """
         try:
-            # If we wanted we could do validation here that what was set was valid ip addresses.
-            # For now we'll just assume it's valid.
-            return {'message': f'Set IP Addresses to {self.options["Addresses"]["Value"]}'}
-        except:
+            self.ip = command['Addresses']
+            return f'[*] Set IP Addresses to {self.ip}'
+        except Exception as e:
+            log.error(e)
+            self.plugin_service.plugin_socketio_message(self.info["Name"], f"[!] {e}")
             return False
 
     def register(self, mainMenu):
         """
         Register hooks for the plugin
         """
-        hooks.register_hook(hooks.AFTER_AGENT_STAGE2_HOOK, 'denylist', self.run_after_agent_checkin)
+        self.installPath = mainMenu.installPath
+        self.main_menu = mainMenu
+        self.plugin_service: PluginService = mainMenu.pluginsv2
+        self.agent_task_service: AgentTaskService = mainMenu.agenttasksv2
+        hooks.register_hook(hooks.AFTER_AGENT_CHECKIN_HOOK, "denylist", self.run_after_agent_checkin)
 
-    def run_after_agent_checkin(self, agent: models.Agent):
+    def run_after_agent_checkin(self, Session, agent: models.Agent):
         """
         Check if agent is in the list of addresses to block. If it is, kill the agent.
         """
-        if not agent.internal_ip or not self.options['Addresses']['Value']:
+        if not agent.internal_ip or not self.ip:
             return
 
         agent_ips = agent.internal_ip.split(',')
-        deny_list = self.options['Addresses']['Value'].split(',')
+        deny_list = self.ip.split(',')
         for ip in agent_ips:
             if ip in deny_list:
-                self.mainMenu.plugin_socketio_message(self.info[0]['Name'], f'[!] Killing agent {agent.session_id} due to blocked ip: {ip}')
-                self.mainMenu.agents.add_agent_task_db(agent.session_id, 'TASK_EXIT', uid=1)
+                self.plugin_service.plugin_socketio_message(self.info['Name'], f'[!] Killing agent {agent.session_id} due to blocked ip: {ip}')
+                with Session as db:
+                    self.agent_task_service.create_task_exit(db, agent, current_user_id=1)
 
     def shutdown(self):
         """
